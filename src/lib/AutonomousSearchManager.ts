@@ -66,10 +66,19 @@ export class AutonomousSearchManager {
 
     try {
       const result = await model.generateContent(prompt);
-      const text = result.response.text().trim();
+      let text = result.response.text().trim();
+      
+      console.log("DEBUG: AI Strategy Response received. Parsing...");
+      
       const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("No JSON object found in AI response");
-      return JSON.parse(jsonMatch[0]);
+      if (!jsonMatch) throw new Error("No JSON object found");
+      
+      let cleanJson = jsonMatch[0]
+        .replace(/,\s*([\]\}])/g, '$1') // Remove trailing commas before ] or }
+        .replace(/[\u0000-\u001F\u007F-\u009F]/g, "") // Remove control characters
+        .trim();
+
+      return JSON.parse(cleanJson);
     } catch (err) {
       console.error("Strategy Planning Error:", err);
       // Fallback strategy if AI fails
