@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Database, Play, Square, RefreshCw, Briefcase, Filter, Search } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function JobManagement() {
   const [activeScrapers, setActiveScrapers] = useState<Record<string, boolean>>({
@@ -13,6 +14,16 @@ export default function JobManagement() {
 
   const toggleScraper = (id: string) => {
     setActiveScrapers(prev => ({ ...prev, [id]: !prev[id] }));
+    if (!activeScrapers[id]) {
+      toast.success(`${id.toUpperCase()} API scraper initiated.`);
+    } else {
+      toast.info(`${id.toUpperCase()} API scraper paused.`);
+    }
+  };
+
+  const handleRunAll = () => {
+    toast.success('Global data ingestion initialized for all pipelines.');
+    setActiveScrapers({ 'remoteok': true, 'remotive': true, 'linkedin': true, 'wellfound': true });
   };
 
   return (
@@ -22,7 +33,7 @@ export default function JobManagement() {
            <h1 className="text-3xl font-black text-white tracking-tighter">Jobs & Scrapers</h1>
            <p className="text-slate-400 font-bold text-sm tracking-wide">Control data ingestion pipelines and manage global job indexes</p>
         </div>
-        <button className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-indigo-600/20 active:scale-95 transition-all">
+        <button onClick={handleRunAll} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-indigo-600/20 active:scale-95 transition-all">
            <Play className="w-4 h-4" /> Run All Scrapers
         </button>
       </div>

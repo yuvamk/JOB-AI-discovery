@@ -41,6 +41,10 @@ export async function generateMetadata(): Promise<Metadata> {
 // For now, we will simply inject the primary color as the base "indigo"
 // since the entire UI is built around tailwind's indigo.
 
+import { AuthModalProvider } from '@/lib/auth/AuthModalContext';
+
+import ClientLayoutWrapper from '@/components/ClientLayoutWrapper';
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -67,15 +71,16 @@ export default async function RootLayout({
         }} />
         <TenantProvider tenant={tenant}>
           <NextAuthSessionProvider>
-            <AuthGuard>
-              <div className="relative min-h-screen flex flex-col">
-                <NavBar />
-                <main className="flex-1">
-                  {children}
-                </main>
-              </div>
-              <Toaster position="top-center" richColors />
-            </AuthGuard>
+            <AuthModalProvider>
+              <AuthGuard>
+                <div className="relative min-h-screen flex flex-col">
+                  <ClientLayoutWrapper>
+                    {children}
+                  </ClientLayoutWrapper>
+                </div>
+                <Toaster position="top-center" richColors />
+              </AuthGuard>
+            </AuthModalProvider>
           </NextAuthSessionProvider>
         </TenantProvider>
       </body>

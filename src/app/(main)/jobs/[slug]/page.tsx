@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation';
 import prisma from '@/lib/prisma';
 import { Metadata } from 'next';
-import { Calendar, Building2, MapPin, DollarSign, Briefcase } from 'lucide-react';
+import { Calendar, Building2, MapPin, DollarSign, Briefcase, FileText } from 'lucide-react';
 import { format } from 'date-fns';
+import AIJobIntelligence from '@/components/jobs/AIJobIntelligence';
 
 type Props = {
   params: Promise<{ slug: string }>;
@@ -139,7 +140,7 @@ export default async function JobDetailPage({ params }: Props) {
             
             <div className="flex flex-col sm:flex-row gap-4 border-t border-slate-200 dark:border-slate-800 pt-6">
                <a 
-                 href={job.application_url || job.source_url} 
+                 href={job.application_url || job.source_url || '#'} 
                  target="_blank" rel="noopener noreferrer"
                  className="flex-1 text-center px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-xl shadow-xl shadow-indigo-500/25 transition-all text-sm uppercase tracking-widest"
                >
@@ -152,7 +153,9 @@ export default async function JobDetailPage({ params }: Props) {
          </div>
 
          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 shadow-sm prose prose-slate dark:prose-invert max-w-none">
-            <h3 className="text-xl font-black uppercase tracking-widest text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+            <AIJobIntelligence job={job} />
+            
+            <h3 className="text-xl font-black uppercase tracking-widest text-slate-900 dark:text-white mb-6 flex items-center gap-2 mt-12">
                <FileText className="w-5 h-5 text-indigo-500" /> About the Role
             </h3>
             

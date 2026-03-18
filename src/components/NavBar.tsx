@@ -7,10 +7,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Briefcase, Search, FileText, LayoutDashboard, 
   Menu, X, Sparkles, User, LogOut, Bell, 
-  ChevronDown, Globe, Zap
+  ChevronDown, Globe, Zap, ShieldCheck
 } from 'lucide-react';
 import { useSession, signOut } from 'next-auth/react';
 import { useTenant } from '@/components/tenant/TenantProvider';
+import { useAuthModal } from '@/lib/auth/AuthModalContext';
 
 const NAV_LINKS = [
   { name: 'Discover', href: '/jobs', icon: Search },
@@ -22,6 +23,7 @@ export default function NavBar() {
   const { data: session } = useSession();
   const tenant = useTenant();
   const pathname = usePathname();
+  const { openModal } = useAuthModal();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -61,6 +63,20 @@ export default function NavBar() {
           </div>
         </Link>
 
+        {/* Global Search Bar */}
+        <div className="hidden lg:flex flex-1 max-w-md mx-8 relative group">
+           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+           <input 
+             type="text"
+             placeholder="Search jobs, companies, or articles..."
+             className="w-full bg-slate-100 dark:bg-slate-900 border-none rounded-2xl pl-12 pr-4 py-2.5 text-xs font-bold text-slate-900 dark:text-white outline-none ring-2 ring-transparent focus:ring-indigo-500/10 transition-all placeholder:text-slate-400"
+           />
+           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+              <kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[9px] font-black text-slate-400">⌘</kbd>
+              <kbd className="px-1.5 py-0.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-[9px] font-black text-slate-400">K</kbd>
+           </div>
+        </div>
+
         {/* Desktop Links */}
         <div className="hidden md:flex items-center gap-8 bg-slate-100/50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-800/50 px-6 py-2 rounded-2xl">
           {NAV_LINKS.map((link) => {
@@ -76,10 +92,21 @@ export default function NavBar() {
                 }`}
               >
                 <link.icon className={`w-4 h-4 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
-                {link.name}
+                <span className="hidden lg:inline">{link.name}</span>
               </Link>
             );
           })}
+          {(session?.user as any)?.role === 'ADMIN' || (session?.user as any)?.role === 'SUPER_ADMIN' ? (
+            <Link
+              href="/admin"
+              className={`flex items-center gap-2 text-sm font-bold transition-all ${
+                pathname.startsWith('/admin') ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              <span className="hidden lg:inline">Admin</span>
+            </Link>
+          ) : null}
         </div>
 
         {/* Auth / Profile */}
@@ -117,18 +144,12 @@ export default function NavBar() {
             </div>
           ) : (
             <div className="flex items-center gap-3">
-              <Link 
-                href="/auth/signin" 
-                className="hidden sm:block text-sm font-black text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-              >
-                Log In
-              </Link>
-              <Link 
-                href="/auth/signin" 
+              <button 
+                onClick={openModal}
                 className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl transition-all shadow-xl shadow-indigo-500/25 active:scale-95 uppercase tracking-wider"
               >
-                Get Started
-              </Link>
+                Log In
+              </button>
             </div>
           )}
 

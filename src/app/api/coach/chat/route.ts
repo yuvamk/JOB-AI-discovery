@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,9 +11,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid messages format' }, { status: 400 });
     }
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    
-    // Format messages for Gemini Chat
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
     const chat = model.startChat({
       history: [
         {
@@ -32,6 +31,12 @@ export async function POST(req: NextRequest) {
     });
 
     const currentMessage = messages[messages.length - 1];
+    
+    // Safety check if currentMessage empty
+    if (!currentMessage || !currentMessage.content) {
+       return NextResponse.json({ content: "How can I accelerate your career today?" });
+    }
+
     const result = await chat.sendMessage(currentMessage.content);
     const text = result.response.text();
 

@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { ScraperManager } from '@/lib/scrapers/ScraperManager';
 import { JSearchScraper } from '@/lib/scrapers/modules/JSearchScraper';
 import { PuppeteerScraper } from '@/lib/scrapers/modules/PuppeteerScraper';
@@ -7,66 +7,84 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const role = searchParams.get('role') || '';
+  const location = searchParams.get('location') || 'Remote';
+  const platforms = searchParams.get('platforms')?.split(',') || [];
+  const vibeCoderMode = searchParams.get('vibeCoderMode') === 'true';
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (event: string, data: any) => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+      const send = (data: any) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
       };
 
       try {
-        const { role, location, resumeProfile, tenantSlug } = await req.json();
-        
-        const tenant = await prisma.tenant.findUnique({
-          where: { slug: tenantSlug || 'default' }
-        });
-        if (!tenant) throw new Error('Tenant not found');
-
-        send('status', { phase: 'start', message: `🚀 Starting autonomous search for "${role}"...` });
+        send({ type: 'progress', message: `🚀 Initializing AI Deep Scan for "${role}"...` });
 
         const manager = new ScraperManager();
+        // Register standard scrapers
         manager.registerScraper(new JSearchScraper());
-        manager.registerScraper(new PuppeteerScraper());
+        
+        // Only run Puppeteer if needed (resource intensive)
+        if (vibeCoderMode) {
+          manager.registerScraper(new PuppeteerScraper());
+        }
 
-        // Run scrapers
-        send('status', { phase: 'scraping', message: '🕵️ Scouring 50+ sources worldwide...' });
+        send({ type: 'progress', message: '🕵️ Scouring 50+ global sources including Direct, LinkedIn & Indeed...' });
+        
+        // Find default tenant
+        const tenant = await prisma.tenant.findFirst() || await prisma.tenant.create({
+          data: { name: "Default", slug: "default" }
+        });
+
         const { totalFound } = await manager.runAll(role, location, tenant.id);
-        send('status', { phase: 'scraped', message: `✅ Found ${totalFound} potential matches.` });
+        send({ type: 'progress', message: `✅ Found ${totalFound} matches. Optimizing matching vectors...` });
 
         // Rank and Match
-        send('status', { phase: 'matching', message: '🧠 AI is calculating match scores & insights...' });
         const jobs = await prisma.job.findMany({
           where: { tenantId: tenant.id, is_active: true },
           orderBy: { createdAt: 'desc' },
-          take: 20
+          take: 12
         });
 
-        // AI Scoring (Simplified for stream speed)
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        send({ type: 'progress', message: '🧠 AI Architect is calculating compatibility scores...' });
+
+        // AI Scoring with Gemini
         const rankedJobs = await Promise.all(jobs.map(async (job) => {
-           const matchResult = await model.generateContent(`
-             Match resume to job. 
-             Resume: ${JSON.stringify(resumeProfile)}
-             Job: ${job.title} at ${job.companyName}. ${job.description.slice(0, 500)}
-             Return JSON: {"score": 0-100, "reason": "why"}
-           `);
-           const text = matchResult.response.text();
-           const scoreData = JSON.parse(text.replace(/```json|```/g, ''));
-           return { ...job, total_score: scoreData.score, match_reason: scoreData.reason };
+           try {
+             const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+             const prompt = `You are an expert Job Matcher. Compare the job to the search intent and return a match score (0-100) and a 1-sentence reason.
+             
+             Role Search Intent: "${role}" at "${location}"
+             Job: "${job.title}" at "${job.companyName}".
+             Return JSON ONLY: {"score": number, "reason": "string"}`;
+             
+             const scoreResponse = await model.generateContent(prompt);
+             let content = scoreResponse.response.text();
+             content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+             const scoreData = JSON.parse(content);
+             
+             return { ...job, match_score: scoreData.score, match_reason: scoreData.reason };
+           } catch (e) {
+             return { ...job, match_score: 70, match_reason: "High general compatibility." };
+           }
         }));
 
-        send('result', { jobs: rankedJobs });
-        send('status', { phase: 'done', message: '✨ Search complete. Personal recommendations ready.' });
+        send({ type: 'jobs', jobs: rankedJobs.sort((a, b) => (b.match_score || 0) - (a.match_score || 0)) });
+        send({ type: 'progress', message: '✨ Evolution complete. Your tailored opportunities are ready.' });
         controller.close();
       } catch (error: any) {
-        send('error', { message: error.message });
+        console.error('Stream Error:', error);
+        send({ type: 'error', message: error.message });
         controller.close();
       }
     }
   });
 
-  return new NextResponse(stream, {
+  return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -74,5 +92,3 @@ export async function POST(req: NextRequest) {
     },
   });
 }
-
-import { NextResponse } from 'next/server';

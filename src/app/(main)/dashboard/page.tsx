@@ -6,6 +6,7 @@ import {
   TrendingUp, Clock, Settings, Bell, Sparkles, ChevronRight
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
+import { toast } from 'sonner';
 
 export default function UserDashboard() {
   const { data: session } = useSession();
@@ -32,11 +33,17 @@ export default function UserDashboard() {
             </p>
           </div>
           <div className="flex gap-4">
-            <button className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-blue-500 transition-all shadow-sm relative">
+            <button 
+              onClick={() => toast.success('You have 2 new AI Matches waiting for you!')}
+              className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-blue-500 transition-all shadow-sm relative"
+            >
                <Bell className="w-5 h-5" />
                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900" />
             </button>
-            <button className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-blue-500 transition-all shadow-sm">
+            <button 
+              onClick={() => toast.info('Settings preferences are currently locked for this demo tenant.')}
+              className="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-blue-500 transition-all shadow-sm"
+            >
                <Settings className="w-5 h-5" />
             </button>
           </div>

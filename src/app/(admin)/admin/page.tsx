@@ -1,32 +1,29 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area
 } from 'recharts';
-import { Users, Briefcase, ServerCrash, DollarSign, TrendingUp, Database } from 'lucide-react';
-
-const DAU_DATA = [
-  { name: 'Mon', users: 4000 },
-  { name: 'Tue', users: 3000 },
-  { name: 'Wed', users: 2000 },
-  { name: 'Thu', users: 2780 },
-  { name: 'Fri', users: 1890 },
-  { name: 'Sat', users: 2390 },
-  { name: 'Sun', users: 3490 },
-];
-
-const JOB_DATA = [
-  { name: 'Mon', jobs: 240 },
-  { name: 'Tue', jobs: 139 },
-  { name: 'Wed', jobs: 980 },
-  { name: 'Thu', jobs: 390 },
-  { name: 'Fri', jobs: 480 },
-  { name: 'Sat', jobs: 380 },
-  { name: 'Sun', jobs: 430 },
-];
+import { Users, Briefcase, ServerCrash, DollarSign, TrendingUp, Database, FileText } from 'lucide-react';
 
 export default function AdminOverview() {
+  const [stats, setStats] = useState<any>(null);
+  const [charts, setCharts] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/admin/stats')
+      .then(res => res.json())
+      .then(data => {
+        setStats(data.stats);
+        setCharts(data.charts);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) return <div className="p-20 text-center text-slate-500 font-bold uppercase tracking-widest">Architecting Analytics...</div>;
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-1000">
       <div className="flex items-center justify-between">
@@ -45,10 +42,10 @@ export default function AdminOverview() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Users" value="12,490" trend="+14%" icon={Users} color="indigo" />
-        <StatCard title="Active Jobs" value="48,231" trend="+5%" icon={Briefcase} color="emerald" />
-        <StatCard title="MRR" value="$14,290" trend="+22%" icon={DollarSign} color="amber" />
-        <StatCard title="Scraper Health" value="98.4%" trend="-1.2%" icon={ServerCrash} color="rose" />
+        <StatCard title="Total Users" value={stats.totalUsers.toLocaleString()} trend="+14%" icon={Users} color="indigo" />
+        <StatCard title="Active Jobs" value={stats.totalJobs.toLocaleString()} trend="+5%" icon={Briefcase} color="emerald" />
+        <StatCard title="Jobs Today" value={stats.jobsToday.toLocaleString()} trend="+22%" icon={Database} color="amber" />
+        <StatCard title="Applications" value={stats.activeApplications.toLocaleString()} trend="-1.2%" icon={FileText} color="rose" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -63,7 +60,7 @@ export default function AdminOverview() {
             </div>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={DAU_DATA}>
+                <AreaChart data={charts.dauData}>
                   <defs>
                     <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
@@ -94,7 +91,7 @@ export default function AdminOverview() {
             </div>
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={JOB_DATA}>
+                <LineChart data={charts.jobData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                   <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
                   <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />

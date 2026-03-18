@@ -14,49 +14,76 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.json();
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-    const prompt = `
-      You are an expert Resume Architect. Transform the following raw user data into a professional, high-impact resume JSON.
-      Rewrite bullet points using strong action verbs and achievement-oriented language (result-focused).
-      
-      User Data: ${JSON.stringify(formData)}
-      
-      Return JSON ONLY in this exact structure:
-      {
-        "basics": { "name", "label", "email", "phone", "location", "summary" },
-        "work": [ { "company", "position", "highlights": [] } ],
-        "education": [ { "institution", "area", "studyType" } ],
-        "skills": [],
-        "projects": [ { "name", "description", "keywords": [] } ]
-      }
-    `;
+    // Step 1: AI Content Generation & Bullet Point Expansion
+    const architecturePrompt = `You are the world's leading Resume Architect. Transform raw user career data into a high-impact, professional JSON resume.
+CRITICAL RULES:
+1. Rewrite every work responsibility into achievement-oriented bullet points using strong action verbs.
+2. Quantify achievements (e.g., 'Increased efficiency by 40%').
+3. Generate a high-impact summary.
+4. Inject relevant industry keywords for ATS.
+5. Return ONLY a valid JSON object matching the standard JSON Resume schema without markdown block characters.
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    const resumeData = JSON.parse(responseText.replace(/```json|```/g, ''));
+Transform this data into a professional resume JSON: ${JSON.stringify(formData)}
 
-    // Find the user to get tenantId and userId
+REQUIRED JSON STRUCTURE:
+{
+  "basics": { "name", "label", "email", "phone", "location", "summary", "headline", "url" },
+  "work": [ { "company", "position", "location", "duration", "summary", "highlights": [] } ],
+  "education": [ { "institution", "area", "studyType", "year", "gpa" } ],
+  "skills": [ { "name", "level", "keywords": [] } ],
+  "projects": [ { "name", "description", "highlights": [], "keywords": [], "url" } ],
+  "certificates": [ { "name", "issuer", "date" } ]
+}`;
+
+    const archResult = await model.generateContent(architecturePrompt);
+    let content = archResult.response.text();
+    content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+    const resumeData = JSON.parse(content);
+
+    // Step 2: ATS Optimization Engine (Scoring)
+    const atsPrompt = `You are an ATS (Applicant Tracking System) simulation engine. Analyze the provided resume JSON and provide an objective ATS compatibility score out of 100, along with identifying 3 missing keywords for the target role.
+    
+Analyze this resume and return JSON ONLY without markdown block characters: ${JSON.stringify(resumeData)}
+
+REQUIRED RESPONSE STRUCTURE:
+{
+  "score": 85,
+  "missingKeywords": ["Docker", "Kubernetes", "Redis"],
+  "improvement": "Add more quantitative results to the work experience section."
+}`;
+
+    const atsResult = await model.generateContent(atsPrompt);
+    let atsContent = atsResult.response.text();
+    atsContent = atsContent.replace(/```json/g, '').replace(/```/g, '').trim();
+    const atsData = JSON.parse(atsContent);
+
+    // Step 3: Persistence
     const user = await prisma.user.findUnique({
       where: { email: session.user.email as string }
     });
 
-    if (!user) throw new Error('User not found');
+    if (!user) throw new Error('User context not found');
 
     const resume = await prisma.resume.create({
       data: {
         userId: user.id,
         tenantId: user.tenantId,
-        title: `Resume ${new Date().toLocaleDateString()}`,
+        title: `${resumeData.basics.name || 'My'} Resume - AI Architected`,
         templateId: 'modern',
-        data: resumeData,
-        atsScore: 85, // Initial placeholder score
+        data: {
+            ...resumeData,
+            atsAnalysis: atsData
+        },
+        atsScore: atsData.score,
       }
     });
 
     return NextResponse.json({ id: resume.id });
+
   } catch (error: any) {
-    console.error('[resume/generate] error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('[resume/generate] Claude Error:', error);
+    return NextResponse.json({ error: 'AI Architect was unable to process your request. Please check your data and try again.' }, { status: 500 });
   }
 }

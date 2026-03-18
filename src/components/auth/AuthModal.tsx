@@ -15,51 +15,48 @@ interface AuthModalProps {
 
 export default function AuthModal({ isOpen, onClose, isAutoTriggered }: AuthModalProps) {
   const [activeTab, setActiveTab] = useState<'google' | 'phone' | 'email' | 'linkedin'>('google');
-  const [emailMode, setEmailMode] = useState<'login' | 'signup'>('login');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   
   // Form states
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [emailOtp, setEmailOtp] = useState('');
+  const [showEmailOtp, setShowEmailOtp] = useState(false);
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [showOtp, setShowOtp] = useState(false);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    
-    if (emailMode === 'signup') {
+    if (!showEmailOtp) {
+      setLoading(true);
       try {
-        const res = await fetch('/api/auth/signup', {
+        const res = await fetch('/api/auth/send-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, password, phone }),
+          body: JSON.stringify({ email }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Signup failed');
+        if (!res.ok) throw new Error(data.error || 'Failed to send OTP code');
         
-        toast.success('Account created! Signing you in...');
-        // Auto sign-in after signup
-        await signIn('email-password', { email, password, callbackUrl: '/dashboard' });
+        toast.success(`Login code sent to ${email}`);
+        setShowEmailOtp(true);
       } catch (err: any) {
         toast.error(err.message);
       } finally {
         setLoading(false);
       }
     } else {
-      const res = await signIn('email-password', {
+      setLoading(true);
+      const res = await signIn('email-otp', {
         email,
-        password,
+        otp: emailOtp,
         redirect: false,
       });
       
       if (res?.error) {
-        toast.error('Invalid email or password');
+        toast.error('Invalid OTP code');
       } else {
-        toast.success('Welcome back!');
+        toast.success('Welcome to Kinetic!');
         onClose();
       }
       setLoading(false);
@@ -96,7 +93,7 @@ export default function AuthModal({ isOpen, onClose, isAutoTriggered }: AuthModa
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl"
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-[8px] z-[-1]"
             onClick={isAutoTriggered ? undefined : onClose}
           />
 
@@ -199,25 +196,6 @@ export default function AuthModal({ isOpen, onClose, isAutoTriggered }: AuthModa
 
               {activeTab === 'email' && (
                 <form onSubmit={handleEmailAuth} className="space-y-4">
-                   <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-2">
-                     <button type="button" onClick={() => setEmailMode('login')} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${emailMode === 'login' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Login</button>
-                     <button type="button" onClick={() => setEmailMode('signup')} className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${emailMode === 'signup' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm' : 'text-slate-400'}`}>Register</button>
-                   </div>
-
-                   {emailMode === 'signup' && (
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
-                        <input 
-                          type="text" 
-                          required
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          placeholder="Your Name" 
-                          className="w-full px-6 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none font-bold text-sm"
-                        />
-                     </div>
-                   )}
-
                    <div className="space-y-1">
                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
                      <input 
@@ -227,36 +205,30 @@ export default function AuthModal({ isOpen, onClose, isAutoTriggered }: AuthModa
                        onChange={(e) => setEmail(e.target.value)}
                        placeholder="you@example.com" 
                        className="w-full px-6 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none font-bold text-sm focus:ring-2 ring-indigo-500/10"
+                       disabled={showEmailOtp}
                      />
                    </div>
 
-                   <div className="space-y-1">
-                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Password</label>
-                     <div className="relative">
+                   {showEmailOtp && (
+                     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Secure Code</label>
                         <input 
-                          type={showPassword ? "text" : "password"}
+                          type="text" 
                           required
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          placeholder="••••••••" 
-                          className="w-full px-6 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none font-bold text-sm focus:ring-2 ring-indigo-500/10"
+                          value={emailOtp}
+                          onChange={(e) => setEmailOtp(e.target.value)}
+                          placeholder="Enter 6-digit code" 
+                          className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl outline-none font-bold text-sm text-center tracking-[0.5em]"
                         />
-                        <button 
-                          type="button" 
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                     </div>
-                   </div>
+                     </motion.div>
+                   )}
 
                    <button 
                     type="submit"
                     disabled={loading}
                     className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-sm uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50"
                    >
-                      {loading ? 'Processing...' : emailMode === 'login' ? 'Sign In' : 'Create Account'}
+                      {loading ? 'Processing...' : showEmailOtp ? 'Verify Code & Sign In' : 'Send Code'}
                    </button>
                 </form>
               )}
@@ -270,15 +242,13 @@ export default function AuthModal({ isOpen, onClose, isAutoTriggered }: AuthModa
                </p>
             </div>
 
-            {/* Close button (only if not forced) */}
-            {!isAutoTriggered && (
-              <button 
-                onClick={onClose}
-                className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
+            {/* Close button */}
+            <button 
+              onClick={onClose}
+              className="absolute top-8 right-8 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
           </motion.div>
         </div>
       )}
