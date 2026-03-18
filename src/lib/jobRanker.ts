@@ -1,15 +1,6 @@
 import type { RawJob } from "./jobScraper";
 import type { JobMatch } from "./jobMatcher";
-
-export interface RankedJob extends RawJob {
-  _id?: string;
-  match: JobMatch;
-  total_score: number;
-  recency_score: number;
-  applicant_score: number;
-  match_score_points: number;
-  is_new?: boolean;
-}
+import type { RankedJob } from "./types/jobs";
 
 function getRecencyScore(postedTimestamp?: number, postedDate?: string): number {
   let ts = postedTimestamp;
@@ -76,7 +67,7 @@ export function rankJobs(
         is_new,
       };
     })
-    .sort((a, b) => b.total_score - a.total_score)
+    .sort((a, b) => (b.total_score || 0) - (a.total_score || 0))
     .slice(0, 20);
 }
 

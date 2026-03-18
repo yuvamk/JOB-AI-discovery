@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { X, Loader2, Download, ExternalLink, AlertCircle, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
-import type { RankedJob } from '@/lib/jobRanker';
+import type { RankedJob } from '@/lib/types/jobs';
 import type { TailoredResume } from '@/app/api/resume/tailor/route';
 
 interface Props {
@@ -226,7 +226,7 @@ export default function TailorResumeModal({ job, resumeText, onClose }: Props) {
                   {tailored.experience?.length > 0 && (
                     <>
                       <SectionHead>Experience</SectionHead>
-                      {tailored.experience.map((exp, i) => (
+                      {tailored.experience.map((exp: any, i: number) => (
                         <div key={i} style={{ marginBottom: '14px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                             <span style={{ fontWeight: 'bold', fontSize: '11pt', fontFamily: 'Georgia, serif' }}>{exp.title}</span>
@@ -236,7 +236,7 @@ export default function TailorResumeModal({ job, resumeText, onClose }: Props) {
                             {exp.company}{exp.location ? ` · ${exp.location}` : ''}
                           </div>
                           <ul style={{ paddingLeft: '16px', margin: '4px 0' }}>
-                            {exp.bullets.map((b, j) => (
+                            {exp.bullets.map((b: string, j: number) => (
                               <li key={j} style={{ fontSize: '10pt', lineHeight: 1.55, color: '#374151', marginBottom: '2px', fontFamily: 'Georgia, serif' }}>{b}</li>
                             ))}
                           </ul>
@@ -249,7 +249,7 @@ export default function TailorResumeModal({ job, resumeText, onClose }: Props) {
                   {tailored.projects && tailored.projects.length > 0 && (
                     <>
                       <SectionHead>Projects</SectionHead>
-                      {tailored.projects.map((p, i) => (
+                      {tailored.projects.map((p: any, i: number) => (
                         <div key={i} style={{ marginBottom: '10px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                             <span style={{ fontWeight: 'bold', fontSize: '10.5pt', fontFamily: 'Georgia, serif' }}>{p.name}</span>
@@ -295,7 +295,7 @@ export default function TailorResumeModal({ job, resumeText, onClose }: Props) {
                   {tailored.education?.length > 0 && (
                     <>
                       <SectionHead>Education</SectionHead>
-                      {tailored.education.map((e, i) => (
+                      {tailored.education.map((e: any, i: number) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontFamily: 'Georgia, serif' }}>
                           <div>
                             <span style={{ fontWeight: 'bold', fontSize: '10.5pt' }}>{e.degree}</span>
@@ -313,7 +313,7 @@ export default function TailorResumeModal({ job, resumeText, onClose }: Props) {
                     <>
                       <SectionHead>Certifications</SectionHead>
                       <ul style={{ paddingLeft: '16px', fontFamily: 'Georgia, serif' }}>
-                        {tailored.certifications.map((c, i) => (
+                        {tailored.certifications.map((c: string, i: number) => (
                           <li key={i} style={{ fontSize: '10pt', color: '#374151', marginBottom: '2px' }}>{c}</li>
                         ))}
                       </ul>

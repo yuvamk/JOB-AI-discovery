@@ -12,6 +12,9 @@ export interface FilterState {
   category: string;
   dateFrom: string;
   dateTo: string;
+  salaryRange: string;
+  industry: string;
+  benefits: string[];
 }
 
 interface Props {
@@ -26,7 +29,10 @@ interface Props {
 }
 
 const JOB_TYPES = ['All', 'Full-time', 'Part-time', 'Contract', 'Freelance', 'Internship'];
-const EXPERIENCE = ['All', 'Junior', 'Mid', 'Senior'];
+const EXPERIENCE = ['All', 'Junior', 'Mid', 'Senior', 'Executive'];
+const SALARY_RANGES = ['All', '0-50k', '50k-100k', '100k-150k', '150k-200k', '200k+'];
+const INDUSTRIES = ['All', 'Technology', 'Healthcare', 'Finance', 'Education', 'Manufacturing', 'Retail'];
+const BENEFITS = ['Health Insurance', 'Equity', '401k', 'Remote', 'Flexible Hours', 'Paid Time Off'];
 
 function Pill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -75,8 +81,15 @@ export default function FilterSidebar({
   const hasDateFilter = filters.dateFrom || filters.dateTo;
   const activeCategoryCount = filters.category ? 1 : 0;
   const activePlatformCount = filters.platform ? 1 : 0;
-  const activeCount = (filters.jobType !== 'All' ? 1 : 0) + (filters.experienceLevel !== 'All' ? 1 : 0)
-    + (filters.remoteOnly ? 1 : 0) + activeCategoryCount + activePlatformCount + (hasDateFilter ? 1 : 0);
+  const activeCount = (filters.jobType !== 'All' ? 1 : 0) + 
+    (filters.experienceLevel !== 'All' ? 1 : 0) + 
+    (filters.remoteOnly ? 1 : 0) + 
+    activeCategoryCount + 
+    activePlatformCount + 
+    (hasDateFilter ? 1 : 0) +
+    (filters.salaryRange !== 'All' ? 1 : 0) +
+    (filters.industry !== 'All' ? 1 : 0) +
+    (filters.benefits.length);
 
   const platformList = availablePlatforms.length > 0 ? availablePlatforms : ['All'];
 
@@ -169,6 +182,44 @@ export default function FilterSidebar({
             </div>
           </Dropdown>
 
+          {/* Salary Range */}
+          <Dropdown label={filters.salaryRange === 'All' ? '💰 Salary' : filters.salaryRange}>
+            <div className="flex flex-wrap gap-1.5 p-1 max-w-[200px]">
+              {SALARY_RANGES.map(s => (
+                <Pill key={s} active={filters.salaryRange === s} onClick={() => set({ salaryRange: s })}>{s}</Pill>
+              ))}
+            </div>
+          </Dropdown>
+
+          {/* Industry */}
+          <Dropdown label={filters.industry === 'All' ? '🏢 Industry' : filters.industry}>
+            <div className="flex flex-wrap gap-1.5 p-1 max-w-[220px]">
+              {INDUSTRIES.map(i => (
+                <Pill key={i} active={filters.industry === i} onClick={() => set({ industry: i })}>{i}</Pill>
+              ))}
+            </div>
+          </Dropdown>
+
+          {/* Benefits */}
+          <Dropdown label={filters.benefits.length > 0 ? `🎁 Benefits (${filters.benefits.length})` : '🎁 Benefits'}>
+            <div className="flex flex-wrap gap-1.5 p-1 max-w-[250px]">
+              {BENEFITS.map(b => (
+                <Pill 
+                  key={b} 
+                  active={filters.benefits.includes(b)} 
+                  onClick={() => {
+                    const newBenefits = filters.benefits.includes(b)
+                      ? filters.benefits.filter(item => item !== b)
+                      : [...filters.benefits, b];
+                    set({ benefits: newBenefits });
+                  }}
+                >
+                  {b}
+                </Pill>
+              ))}
+            </div>
+          </Dropdown>
+
           {/* Remote Only toggle */}
           <button
             onClick={() => set({ remoteOnly: !filters.remoteOnly })}
@@ -203,8 +254,20 @@ export default function FilterSidebar({
           {/* Clear all */}
           {activeCount > 0 && (
             <button
-              onClick={() => onChange({ sortBy: 'best_match', jobType: 'All', experienceLevel: 'All', platform: '', remoteOnly: false, category: '', dateFrom: '', dateTo: '' })}
-              className="text-xs text-red-400 hover:text-red-500 font-medium flex items-center gap-1 px-2 py-2"
+               onClick={() => onChange({ 
+                 sortBy: 'best_match', 
+                 jobType: 'All', 
+                 experienceLevel: 'All', 
+                 platform: '', 
+                 remoteOnly: false, 
+                 category: '', 
+                 dateFrom: '', 
+                 dateTo: '',
+                 salaryRange: 'All',
+                 industry: 'All',
+                 benefits: []
+               })}
+               className="text-xs text-red-400 hover:text-red-500 font-medium flex items-center gap-1 px-2 py-2"
             >
               <X className="w-3 h-3" /> Clear all
             </button>

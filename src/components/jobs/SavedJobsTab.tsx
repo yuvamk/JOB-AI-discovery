@@ -1,7 +1,7 @@
 'use client';
 
 import { Download, Trash2, ExternalLink, Bookmark, Sparkles } from 'lucide-react';
-import type { RankedJob } from '@/lib/jobRanker';
+import type { RankedJob } from '@/lib/types/jobs';
 
 interface Props {
   savedJobs: RankedJob[];
@@ -119,7 +119,7 @@ export default function SavedJobsTab({ savedJobs, onRemove, onTailor }: Props) {
                 <Sparkles className="w-3.5 h-3.5" />
               </button>
               <button
-                onClick={() => onRemove(job.apply_link)}
+                onClick={() => onRemove(job.apply_link || '')}
                 className="p-1.5 rounded-lg bg-red-50 dark:bg-red-950/30 text-red-400 dark:text-red-500 hover:bg-red-100 transition-colors opacity-0 group-hover:opacity-100"
                 title="Remove"
               >

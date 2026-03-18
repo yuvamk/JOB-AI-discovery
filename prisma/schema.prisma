@@ -1,0 +1,275 @@
+// This is your Prisma schema file for MongoDB
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  JOB_SEEKER
+  RECRUITER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  FREELANCE
+  INTERNSHIP
+  APPRENTICESHIP
+}
+
+enum ExperienceLevel {
+  FRESHER
+  JUNIOR
+  MID
+  SENIOR
+  EXECUTIVE
+}
+
+enum RemoteType {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+enum ApplicationStatus {
+  APPLIED
+  VIEWED
+  INTERVIEW
+  OFFER
+  REJECTED
+}
+
+model Tenant {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  slug      String   @unique
+  domain    String?  @unique
+  plan      String   @default("FREE")
+  settings  Json?
+  logo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isActive  Boolean  @default(true)
+
+
+  users        User[]
+  jobs         Job[]
+  resumes      Resume[]
+  applications Application[]
+  companies    Company[]
+  auditLogs    AuditLog[]
+}
+
+model User {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId        String   @db.ObjectId
+  name            String?
+  email           String   @unique
+  phone           String?
+  passwordHash    String?
+  googleId        String?
+  linkedinId      String?
+  role            UserRole @default(JOB_SEEKER)
+  avatar          String?
+  headline        String?
+  location        String?
+  bio             String?
+  skills          String[]
+  experienceLevel ExperienceLevel?
+  profileComplete Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  lastLogin       DateTime?
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  resumes      Resume[]
+  applications Application[]
+  savedJobs    SavedJob[]
+  jobAlerts    JobAlert[]
+  notifications Notification[]
+  auditLogs    AuditLog[]
+}
+
+model Resume {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String   @db.ObjectId
+  tenantId   String   @db.ObjectId
+  title      String
+  templateId String
+  data       Json
+  atsScore   Int?
+  version    Int      @default(1)
+  isDefault  Boolean  @default(false)
+  pdfUrl     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id])
+  tenant   Tenant        @relation(fields: [tenantId], references: [id])
+  versions ResumeVersion[]
+  applications Application[]
+}
+
+model ResumeVersion {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  resumeId String   @db.ObjectId
+  data     Json
+  createdAt DateTime @default(now())
+
+  resume Resume @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
+
+model Job {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId          String   @db.ObjectId
+  title             String
+  companyName       String
+  companyId         String?  @db.ObjectId
+  location          String
+  country           String
+  salary_min        Float?
+  salary_max        Float?
+  currency          String   @default("USD")
+  description       String
+  requirements      String?
+  benefits          String?
+  job_type          JobType  @default(FULL_TIME)
+  experience_level  ExperienceLevel @default(MID)
+  skills            String[]
+  remote_type       RemoteType @default(ONSITE)
+  source            String?
+  source_url        String?
+  application_url   String?
+  logo_url          String?
+  posted_at         DateTime @default(now())
+  expires_at        DateTime?
+  is_active         Boolean  @default(true)
+  is_featured       Boolean  @default(false)
+  views             Int      @default(0)
+  createdAt         DateTime @default(now())
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  company      Company?      @relation(fields: [companyId], references: [id])
+  applications Application[]
+  savedJobs    SavedJob[]
+}
+
+model Application {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  jobId       String   @db.ObjectId
+  tenantId    String   @db.ObjectId
+  resumeId    String   @db.ObjectId
+  coverLetter String?
+  status      ApplicationStatus @default(APPLIED)
+  appliedAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id])
+  job    Job    @relation(fields: [jobId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  resume Resume @relation(fields: [resumeId], references: [id])
+}
+
+model SavedJob {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  jobId     String   @db.ObjectId
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  job  Job  @relation(fields: [jobId], references: [id])
+
+  @@unique([userId, jobId])
+}
+
+model JobAlert {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  filters       Json
+  name          String
+  frequency     String   @default("DAILY")
+  lastTriggered DateTime?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Company {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId    String   @db.ObjectId
+  name        String
+  slug        String   @unique
+  logo        String?
+  website     String?
+  description String?
+  size        String?
+  industry    String?
+  country     String?
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  jobs   Job[]
+}
+
+model ScraperLog {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  source     String
+  jobsFound  Int      @default(0)
+  jobsSaved  Int      @default(0)
+  errors     String?
+  duration   Int?
+  runAt      DateTime @default(now())
+  status     String   @default("SUCCESS")
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  type      String
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  tenantId  String   @db.ObjectId
+  userId    String?  @db.ObjectId
+  action    String
+  entity    String
+  entityId  String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+}
+
+model BlogPost {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  title           String
+  slug            String   @unique
+  content         String
+  metaDescription String?
+  tags            String[]
+  author          String
+  published       Boolean  @default(false)
+  publishedAt     DateTime?
+  createdAt       DateTime @default(now())
+}

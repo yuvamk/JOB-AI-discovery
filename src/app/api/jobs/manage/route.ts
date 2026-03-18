@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import dbConnect from '@/lib/mongodb';
-import JobModel from '@/models/Job';
-import { InstinctStore } from '@/lib/InstinctStore';
+import prisma from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
 
 export async function DELETE(req: NextRequest) {
   try {
-    await dbConnect();
+    const session = await getServerSession(authOptions);
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const { searchParams } = new URL(req.url);
     const deleteAll = searchParams.get('deleteAll') === 'true';
     const id = searchParams.get('id');
 
     if (deleteAll) {
-      const result = await JobModel.deleteMany({});
+      const result = await prisma.job.deleteMany({});
       return NextResponse.json({ 
         message: 'All jobs deleted successfully', 
-        count: result.deletedCount 
+        count: result.count 
       });
     }
 
@@ -22,23 +24,15 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
     }
 
-    const deletedJob = await JobModel.findByIdAndDelete(id);
-    if (!deletedJob) {
-      return NextResponse.json({ error: 'Job not found' }, { status: 404 });
-    }
-
-    // Record this as a "dislike" instinct (ECC Learning)
-    try {
-      await InstinctStore.recordPreference(id, 'dislike', deletedJob.title);
-    } catch (err) {
-      console.error('Failed to record instinct:', err);
-    }
+    await prisma.job.delete({
+      where: { id },
+    });
 
     return NextResponse.json({ message: 'Job deleted successfully' });
-  } catch (err: unknown) {
+  } catch (err: any) {
     console.error('[manage/DELETE] error:', err);
     return NextResponse.json({ 
-      error: err instanceof Error ? err.message : 'Failed to delete job' 
+      error: err.message || 'Failed to delete job' 
     }, { status: 500 });
   }
 }

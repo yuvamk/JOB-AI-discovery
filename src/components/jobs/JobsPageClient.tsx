@@ -1,474 +1,483 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Bookmark, Search, Database, ChevronDown, ChevronUp, Settings2, Trash2, X } from 'lucide-react';
-import ResumeUploadPanel from './ResumeUploadPanel';
-import JobSearchPanel from './JobSearchPanel';
-import FilterSidebar, { type FilterState } from './FilterSidebar';
-import JobsGrid from './JobsGrid';
-import SavedJobsTab from './SavedJobsTab';
-import LiveActivityFeed, { type ActivityLog } from './LiveActivityFeed';
-import TailorResumeModal from './TailorResumeModal';
-import type { ResumeProfile } from '@/lib/resumeParser';
-import type { RankedJob } from '@/lib/jobRanker';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Search, SlidersHorizontal, MapPin, 
+  Briefcase, DollarSign, Filter, Sparkles,
+  ChevronDown, LayoutGrid, List as ListIcon,
+  Zap, ArrowRight, ShieldCheck, Clock, Globe, RefreshCw
+} from 'lucide-react';
+import { toast } from 'sonner';
+import JobsGrid from '@/components/jobs/JobsGrid';
+import FilterSidebar, { FilterState } from '@/components/jobs/FilterSidebar';
+import JobCarousel from '@/components/jobs/JobCarousel';
+import AICoachChat from '@/components/jobs/AICoachChat';
+import { RankedJob } from '@/lib/types/jobs';
 
-type Tab = 'discover' | 'saved' | 'db';
-
-const DEFAULT_FILTERS: FilterState = {
+const INITIAL_FILTERS: FilterState = {
   sortBy: 'best_match',
   jobType: 'All',
   experienceLevel: 'All',
-  platform: '',
+  platform: 'All',
   remoteOnly: false,
   category: '',
   dateFrom: '',
   dateTo: '',
+  salaryRange: 'All',
+  industry: 'All',
+  benefits: [],
 };
 
-const REFRESH_INTERVAL_SECS = 6 * 60 * 60;
-let logIdCounter = 0;
+const PLATFORMS = [
+  { id: 'remotive',       label: 'Remotive',           free: true,  emoji: '🌐' },
+  { id: 'remoteok',       label: 'RemoteOK',           free: true,  emoji: '🏠' },
+  { id: 'jobicy',         label: 'Jobicy',             free: true,  emoji: '🎯' },
+  { id: 'arbeitnow',      label: 'Arbeitnow',          free: true,  emoji: '🇪🇺' },
+  { id: 'weworkremotely', label: 'We Work Remotely',   free: true,  emoji: '💼' },
+  { id: 'themuse',        label: 'The Muse',           free: true,  emoji: '🎨' },
+  { id: 'hn',             label: 'HN Hiring',          free: true,  emoji: '🟠' },
+  { id: 'findwork',       label: 'Findwork.dev',       free: true,  emoji: '🔍' },
+  { id: 'adzuna',         label: 'Adzuna',             free: false, emoji: '📋' },
+  { id: 'jsearch',        label: 'LinkedIn / Indeed',  free: false, emoji: '💎' },
+  { id: 'google',         label: 'Google Search',      free: true,  emoji: '🔍' },
+];
+
+const FREE_PLATFORMS = PLATFORMS.filter(p => p.free).map(p => p.id);
 
 export default function JobsPageClient() {
-  const [activeTab, setActiveTab] = useState<Tab>('discover');
-  const [profile, setProfile] = useState<ResumeProfile | null>(null);
-  const [resumeText, setResumeText] = useState<string | null>(null);
-  const [tailorJob, setTailorJob] = useState<RankedJob | null>(null);
-  const [allJobs, setAllJobs] = useState<RankedJob[]>([]);
-  const [dbJobs, setDbJobs] = useState<RankedJob[]>([]);
-  const [savedJobs, setSavedJobs] = useState<RankedJob[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
-  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
+  const [activeTab, setActiveTab] = useState<'search' | 'saved'>('search');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [filters, setFilters] = useState<FilterState>(INITIAL_FILTERS);
+  const [savedJobs, setSavedJobs] = useState<Set<string>>(new Set());
+  const [savedJobsList, setSavedJobsList] = useState<RankedJob[]>([]);
+  
+  const MOCK_TRENDING: RankedJob[] = [
+    { title: 'AI Research Engineer', companyName: 'OpenAI', location: 'San Francisco', total_score: 98, source_platform: 'Direct', job_type: 'Full-time', salary: '$200k - $300k', industry: 'Technology', benefits: 'Equity, Health', match_score: 95 },
+    { title: 'Full Stack Developer', companyName: 'Vercel', location: 'Remote', total_score: 95, source_platform: 'Direct', job_type: 'Full-time', salary: '$150k - $220k', industry: 'Technology', benefits: 'Remote, Health', match_score: 92 },
+    { title: 'Product Designer', companyName: 'Stripe', location: 'Dublin', total_score: 92, source_platform: 'Direct', job_type: 'Full-time', salary: '$140k - $190k', industry: 'Finance', benefits: 'Health, 401k', match_score: 88 },
+    { title: 'Platform Engineer', companyName: 'Cloudflare', location: 'London', total_score: 90, source_platform: 'Direct', job_type: 'Full-time', salary: '£120k - £160k', industry: 'Technology', benefits: 'Equity, Remote', match_score: 85 },
+  ];
+  const [trendingJobs] = useState<RankedJob[]>(MOCK_TRENDING);
+  
+  // Search State
+  const [role, setRole] = useState('');
+  const [location, setLocation] = useState('Remote');
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(FREE_PLATFORMS);
   const [vibeCoderMode, setVibeCoderMode] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(false);
-  const [nextRefreshIn, setNextRefreshIn] = useState(REFRESH_INTERVAL_SECS);
-  const [newJobCount, setNewJobCount] = useState(0);
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [showTerminal, setShowTerminal] = useState(false);
-  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
-  const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
-  const [dbTotal, setDbTotal] = useState(0);
-  const [setupOpen, setSetupOpen] = useState(true);
+  const [autonomousMode, setAutonomousMode] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [jobs, setJobs] = useState<RankedJob[]>([]);
+  const [progress, setProgress] = useState<string[]>([]);
+  const [selectedJob, setSelectedJob] = useState<RankedJob | null>(null);
 
-  const lastSearchRef = useRef<{ role: string; location: string; platforms: string[]; vibeCoderMode: boolean; experience?: { years: number; months: number }; autonomous: boolean } | null>(null);
-  const previousJobKeysRef = useRef<Set<string>>(new Set());
-  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
-  const addLog = useCallback((log: Omit<ActivityLog, 'id' | 'timestamp'>) => {
-    setActivityLogs(prev => [...prev.slice(-99), { ...log, id: ++logIdCounter, timestamp: new Date() }]);
-  }, []);
-
-  useEffect(() => {
-    try {
-      const s = localStorage.getItem('kinetic_saved_jobs');
-      if (s) setSavedJobs(JSON.parse(s));
-      const p = localStorage.getItem('kinetic_resume_profile');
-      if (p) setProfile(JSON.parse(p));
-    } catch { /* ignore */ }
-  }, []);
-  useEffect(() => { localStorage.setItem('kinetic_saved_jobs', JSON.stringify(savedJobs)); }, [savedJobs]);
-  useEffect(() => {
-    if (profile) localStorage.setItem('kinetic_resume_profile', JSON.stringify(profile));
-    else localStorage.removeItem('kinetic_resume_profile');
-  }, [profile]);
-
-  const fetchDbJobs = useCallback(async () => {
-    const params = new URLSearchParams();
-    if (filters.category) params.set('category', filters.category);
-    if (filters.platform) params.set('platform', filters.platform);
-    if (filters.dateFrom) params.set('dateFrom', filters.dateFrom);
-    if (filters.dateTo) params.set('dateTo', filters.dateTo);
-    params.set('sortBy', filters.sortBy === 'newest' ? 'posted_timestamp' : 'total_score');
-    params.set('limit', '50');
-    try {
-      const res = await fetch(`/api/jobs/list?${params}`);
-      const data = await res.json();
-      setDbJobs(data.jobs ?? []);
-      setDbTotal(data.total ?? 0);
-      if (data.filters) {
-        setAvailableCategories(data.filters.categories ?? []);
-        setAvailablePlatforms(data.filters.platforms ?? []);
+  // Re-calculate filtered jobs when deps change
+  const displayedJobs = (() => {
+    const list = activeTab === 'search' ? jobs : savedJobsList;
+    return list.filter(job => {
+      // Job Type Filter
+      if (filters.jobType !== 'All') {
+        const type = (job.job_type || '').toLowerCase();
+        if (!type.includes(filters.jobType.toLowerCase())) return false;
       }
-    } catch { /* ignore */ }
-  }, [filters]);
+      
+      // Experience Level Filter
+      if (filters.experienceLevel !== 'All') {
+        const exp = (job.experience_level || '').toLowerCase();
+        if (!exp.includes(filters.experienceLevel.toLowerCase())) return false;
+      }
+      
+      // Remote Only
+      if (filters.remoteOnly) {
+        if (!job.location.toLowerCase().includes('remote')) return false;
+      }
+      
+      // Platform
+      if (filters.platform && filters.platform !== 'All') {
+        if (job.source_platform !== filters.platform) return false;
+      }
 
-  useEffect(() => { if (activeTab === 'db') fetchDbJobs(); }, [activeTab, fetchDbJobs]);
-  useEffect(() => {
-    fetch('/api/jobs/list?limit=1').then(r => r.json()).then(d => {
-      if (d.filters) { setAvailableCategories(d.filters.categories ?? []); setAvailablePlatforms(d.filters.platforms ?? []); }
-      if (d.total) setDbTotal(d.total);
-    }).catch(() => {});
-  }, []);
+      // Salary Range Filter
+      if (filters.salaryRange !== 'All') {
+        const [min, max] = filters.salaryRange.replace('k', '').split('-').map(v => parseInt(v) * 1000 || (v.includes('+') ? 200000 : 0));
+        const jobMin = job.salary_min || 0;
+        const jobMax = job.salary_max || 0;
+        if (filters.salaryRange.includes('+')) {
+           if (jobMax < 150000 && jobMin < 150000) return false;
+        } else {
+           if (jobMin > max || (jobMax < min && jobMax > 0)) return false;
+        }
+      }
 
-  const runStreamSearch = useCallback(async (params: { role: string; location: string; platforms: string[]; vibeCoderMode: boolean; experience?: { years: number; months: number }; autonomous: boolean }) => {
-    abortRef.current?.abort();
-    abortRef.current = new AbortController();
+      // Industry Filter
+      if (filters.industry !== 'All') {
+        if (!job.industry?.toLowerCase().includes(filters.industry.toLowerCase())) return false;
+      }
+
+      // Benefits Filter
+      if (filters.benefits.length > 0) {
+        const jobBenefits = (job.benefits || '').toLowerCase();
+        if (!filters.benefits.some(b => jobBenefits.includes(b.toLowerCase()))) return false;
+      }
+
+      return true;
+    });
+  })();
+
+  const handleSaveJob = (job: RankedJob) => {
+    const link = job.applyUrl || job.apply_link;
+    if (!link) return;
+
+    setSavedJobs(prev => {
+      const next = new Set(prev);
+      if (next.has(link)) {
+        next.delete(link);
+        setSavedJobsList(list => list.filter(j => (j.applyUrl || j.apply_link) !== link));
+        toast.info('Job removed from saved list');
+      } else {
+        next.add(link);
+        setSavedJobsList(list => [job, ...list]);
+        toast.success('Job saved to library');
+      }
+      return next;
+    });
+  };
+
+  const handleSearch = async () => {
+    if (!role.trim()) return;
+    setActiveTab('search');
     setLoading(true);
-    setIsStreaming(true);
-    setShowTerminal(true);
-    setNewJobCount(0);
-    setActivityLogs([]);
-    setSetupOpen(false);
-    lastSearchRef.current = params;
-
-    addLog({ phase: 'start', message: `🚀 Searching "${params.role}" on ${params.platforms.length} platform(s)…`, type: 'status' });
-
+    setJobs([]);
+    setProgress(['Initializing Deep Scan...']);
+    
     try {
-      const res = await fetch('/api/jobs/stream', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          role: params.role, 
-          location: params.location, 
-          platforms: params.platforms, 
-          resumeProfile: profile,
-          experience: params.experience,
-          autonomous: params.autonomous
-        }),
-        signal: abortRef.current.signal,
+      const params = new URLSearchParams({
+        role,
+        location,
+        platforms: selectedPlatforms.join(','),
+        vibeCoderMode: vibeCoderMode.toString(),
+        autonomous: autonomousMode.toString()
       });
-      if (!res.ok || !res.body) throw new Error('Stream failed to start');
 
-      const reader = res.body.getReader();
+      const response = await fetch(`/api/jobs/stream?${params.toString()}`);
+      if (!response.body) throw new Error('No response body');
+
+      const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
 
       while (true) {
-        const { done, value } = await reader.read();
+        const { value, done } = await reader.read();
         if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const blocks = buffer.split('\n\n');
-        buffer = blocks.pop() ?? '';
 
-        for (const block of blocks) {
-          const eventMatch = block.match(/^event: (.+)/m);
-          const dataMatch = block.match(/^data: (.+)/m);
-          if (!eventMatch || !dataMatch) continue;
-          const event = eventMatch[1].trim();
-          let data: Record<string, unknown>;
-          try { data = JSON.parse(dataMatch[1]); } catch { continue; }
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
 
-          if (event === 'result') {
-            const jobs = (data.jobs ?? []) as RankedJob[];
-            const keys = new Set(jobs.map(j => j.apply_link || `${j.title}__${j.company}`));
-            if (previousJobKeysRef.current.size > 0) setNewJobCount([...keys].filter(k => !previousJobKeysRef.current.has(k)).length);
-            previousJobKeysRef.current = keys;
-            setAllJobs(jobs);
-            setSearched(true);
-          } else if (event === 'error') {
-            addLog({ phase: 'error', message: String(data.message ?? 'Unknown error'), type: 'error' });
-          } else if (['status', 'scraped', 'matching'].includes(event)) {
-            addLog({ phase: String(data.phase ?? event), message: String(data.message ?? ''), type: event as ActivityLog['type'], meta: data });
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'progress') {
+                setProgress(prev => [...prev.slice(-3), data.message]);
+              } else if (data.type === 'jobs') {
+                setJobs(data.jobs);
+              } else if (data.type === 'error') {
+                toast.error(data.message);
+              }
+            } catch (e) {
+              console.error('Error parsing SSE:', e);
+            }
           }
         }
       }
-      addLog({ phase: 'done', message: '✅ Done! Jobs saved to database.', type: 'status' });
-      fetch('/api/jobs/list?limit=1').then(r => r.json()).then(d => {
-        if (d.filters) { setAvailableCategories(d.filters.categories ?? []); setAvailablePlatforms(d.filters.platforms ?? []); }
-        if (d.total) setDbTotal(d.total);
-      }).catch(() => {});
-    } catch (err: unknown) {
-      if ((err as Error).name !== 'AbortError') {
-        addLog({ phase: 'error', message: `❌ ${(err as Error).message}`, type: 'error' });
-      }
+    } catch (error) {
+      console.error('Search failed:', error);
+      toast.error('Deep Scan failed. Please try again.');
     } finally {
       setLoading(false);
-      setIsStreaming(false);
     }
-  }, [profile, addLog]);
+  };
 
-  const handleDeleteJob = useCallback(async (id: string) => {
-    if (!confirm('Are you sure you want to delete this job from your database?')) return;
-    try {
-      const res = await fetch(`/api/jobs/manage?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setDbJobs(prev => prev.filter(j => j._id !== id));
-        setDbTotal(prev => Math.max(0, prev - 1));
-        setAllJobs(prev => prev.filter(j => j._id !== id));
-      }
-    } catch (err) { console.error('Delete failed:', err); }
-  }, []);
-
-  const handleDeleteAll = useCallback(async () => {
-    if (!confirm('⚠️ Are you sure you want to delete EVERY job from your database? This cannot be undone.')) return;
-    try {
-      const res = await fetch('/api/jobs/manage?deleteAll=true', { method: 'DELETE' });
-      if (res.ok) {
-        setDbJobs([]);
-        setDbTotal(0);
-        setAllJobs([]);
-      }
-    } catch (err) { console.error('Delete all failed:', err); }
-  }, []);
-
-  const handleSearch = useCallback((params: { role: string; location: string; platforms: string[]; vibeCoderMode: boolean; experience?: { years: number; months: number }; autonomous: boolean }) => {
-    setVibeCoderMode(params.vibeCoderMode);
-    runStreamSearch(params);
-  }, [runStreamSearch]);
-
-  const startCountdown = useCallback((params: typeof lastSearchRef.current) => {
-    if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-    setNextRefreshIn(REFRESH_INTERVAL_SECS);
-    countdownRef.current = setInterval(() => setNextRefreshIn(p => p <= 1 ? REFRESH_INTERVAL_SECS : p - 1), 1000);
-    refreshTimerRef.current = setInterval(() => { if (params) runStreamSearch(params); }, REFRESH_INTERVAL_SECS * 1000);
-  }, [runStreamSearch]);
-
-  useEffect(() => {
-    if (!autoRefresh) {
-      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    } else if (lastSearchRef.current) startCountdown(lastSearchRef.current);
-    return () => {
-      if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
-  }, [autoRefresh, startCountdown]);
-
-  const handleSaveJob = useCallback((job: RankedJob) => {
-    setSavedJobs(prev => prev.find(j => j.apply_link === job.apply_link)
-      ? prev.filter(j => j.apply_link !== job.apply_link) : [...prev, job]);
-  }, []);
-
-  const savedJobLinks = new Set(savedJobs.map(j => j.apply_link));
-
-  const filteredJobs = allJobs.filter(job => {
-    if (vibeCoderMode && !job.is_vibe_coder_friendly) return false;
-    if (filters.remoteOnly && !job.location.toLowerCase().includes('remote')) return false;
-    if (filters.jobType !== 'All' && !job.job_type?.toLowerCase().includes(filters.jobType.toLowerCase())) return false;
-    if (filters.platform && !job.source_platform?.toLowerCase().includes(filters.platform.toLowerCase())) return false;
-    return true;
-  }).sort((a, b) => {
-    if (filters.sortBy === 'newest') return (b.posted_timestamp ?? 0) - (a.posted_timestamp ?? 0);
-    if (filters.sortBy === 'fewest_applicants') return (a.applicant_count ?? 999) - (b.applicant_count ?? 999);
-    return b.total_score - a.total_score;
-  });
-
-  const tabs = [
-    { id: 'discover' as Tab, label: 'Discover Jobs', icon: Search },
-    { id: 'saved' as Tab, label: `Saved${savedJobs.length > 0 ? ` (${savedJobs.length})` : ''}`, icon: Bookmark },
-    { id: 'db' as Tab, label: `All in DB${dbTotal > 0 ? ` (${dbTotal})` : ''}`, icon: Database },
-  ];
+  const handleExportCSV = () => {
+    if (savedJobsList.length === 0) return;
+    const headers = ['Title', 'Company', 'Location', 'Source', 'Posted', 'Match Score', 'Apply Link'];
+    const rows = savedJobsList.map(j => [
+      `"${j.title}"`,
+      `"${j.companyName || j.company}"`,
+      `"${j.location}"`,
+      `"${j.source_platform || 'Direct'}"`,
+      `"${j.posted_date || 'Recently'}"`,
+      j.match_score || j.total_score || 0,
+      `"${j.applyUrl || j.apply_link}"`
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `kinetic-saved-jobs-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('CSV Exported successfully');
+  };
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 space-y-4">
-
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center shadow-lg shadow-blue-500/25 shrink-0">
-            <Search className="w-5 h-5 text-white" />
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pt-32 pb-20 px-6">
+      <div className="max-w-7xl mx-auto">
+        
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16">
+          <div className="space-y-4 max-w-2xl">
+            <div className="flex items-center gap-2 text-indigo-600 font-black uppercase tracking-[0.2em] text-[10px]">
+              <Globe className="w-3.5 h-3.5" />
+              <span>Scanning 50+ Global Direct Sources</span>
+            </div>
+            <h1 className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white tracking-tighter leading-[0.85]">
+              DISCOVER YOUR<br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">NEXT EVOLUTION.</span>
+            </h1>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">Job Discovery</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">AI-powered matching · Real-time scraping · MongoDB persistence</p>
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-1 w-fit shadow-sm">
-          {tabs.map(({ id, label, icon: Icon }) => (
-            <button key={id} onClick={() => setActiveTab(id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                activeTab === id
-                  ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-              }`}>
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="hidden sm:inline">{label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* ═══ SAVED TAB ═══════════════════════════════════ */}
-        {activeTab === 'saved' && (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-            <SavedJobsTab 
-              savedJobs={savedJobs} 
-              onRemove={link => setSavedJobs(prev => prev.filter(j => j.apply_link !== link))} 
-              onTailor={setTailorJob}
-            />
-          </div>
-        )}
-
-        {/* ═══ DB JOBS TAB ══════════════════════════════════ */}
-        {activeTab === 'db' && (
-          <div className="space-y-4">
-            <FilterSidebar
-              filters={filters}
-              onChange={f => { setFilters(f); setTimeout(fetchDbJobs, 0); }}
-              autoRefresh={autoRefresh}
-              onAutoRefreshToggle={setAutoRefresh}
-              nextRefreshIn={nextRefreshIn}
-              jobCount={dbTotal}
-              availableCategories={availableCategories}
-              availablePlatforms={availablePlatforms}
-            />
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  <span className="font-bold text-slate-900 dark:text-white">{dbTotal}</span> jobs in database
-                </p>
-                <button
-                  onClick={handleDeleteAll}
-                  className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 font-bold uppercase tracking-wider transition-colors"
+          <div className="flex flex-col items-end gap-6">
+             <div className="flex bg-slate-100 dark:bg-slate-900 p-1.5 rounded-[2rem] border border-slate-200 dark:border-slate-800">
+                <button 
+                  onClick={() => setActiveTab('search')}
+                  className={`px-8 py-3 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest transition-all ${
+                    activeTab === 'search' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-xl' : 'text-slate-400'
+                  }`}
                 >
-                  <Trash2 className="w-3 h-3" /> Clear All Data
+                  AI Search
                 </button>
-              </div>
-              <button
-                onClick={fetchDbJobs}
-                className="text-xs text-blue-600 dark:text-blue-400 hover:underline font-medium"
-              >
-                Refresh List
-              </button>
-            </div>
-            <JobsGrid 
-              jobs={dbJobs as unknown as RankedJob[]} 
-              savedJobLinks={savedJobLinks} 
-              onSave={handleSaveJob} 
-              onTailor={setTailorJob} 
-              onDelete={handleDeleteJob} 
-              loading={false} 
-              searched={true} 
-              newJobCount={0} 
-            />
-          </div>
-        )}
-
-        {/* ═══ DISCOVER TAB ═════════════════════════════════ */}
-        {activeTab === 'discover' && (
-          <div className="space-y-4">
-            {/* Collapsible Setup Panel */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-              <button
-                onClick={() => setSetupOpen(o => !o)}
-                className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <Settings2 className="w-4 h-4 text-slate-400" />
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    {profile
-                      ? `${profile.seniority_level} · ${profile.preferred_roles?.[0] ?? 'Developer'}`
-                      : 'Setup — Resume & Search'}
-                  </span>
-                  {profile && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 font-semibold">✓ Resume loaded</span>
+                <button 
+                  onClick={() => setActiveTab('saved')}
+                  className={`px-8 py-3 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest transition-all relative ${
+                    activeTab === 'saved' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-xl' : 'text-slate-400'
+                  }`}
+                >
+                  Saved {savedJobsList.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[8px]">
+                      {savedJobsList.length}
+                    </span>
                   )}
-                </div>
-                {setupOpen
-                  ? <ChevronUp className="w-4 h-4 text-slate-400" />
-                  : <ChevronDown className="w-4 h-4 text-slate-400" />}
-              </button>
+                </button>
+             </div>
 
-              {setupOpen && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-t border-slate-100 dark:border-slate-800">
-                  <div className="p-5 md:border-r border-slate-100 dark:border-slate-800">
-                    <ResumeUploadPanel 
-                      profile={profile} 
-                      onProfileChange={setProfile} 
-                      onResumeTextChange={setResumeText} 
-                    />
-                  </div>
-                  <div className="p-5">
-                    <JobSearchPanel
-                      profile={profile}
-                      onSearch={handleSearch}
-                      loading={loading}
-                      vibeCoderMode={vibeCoderMode}
-                      onVibeCoderToggle={setVibeCoderMode}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Horizontal Filter Bar */}
-            <FilterSidebar
-              filters={filters}
-              onChange={setFilters}
-              autoRefresh={autoRefresh}
-              onAutoRefreshToggle={setAutoRefresh}
-              nextRefreshIn={nextRefreshIn}
-              jobCount={filteredJobs.length}
-              availableCategories={availableCategories}
-              availablePlatforms={availablePlatforms}
-            />
-
-            {/* Live Terminal — only shown when streaming or has logs, togglable */}
-            {(isStreaming || activityLogs.length > 0) && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <button
-                    onClick={() => setShowTerminal(s => !s)}
-                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium transition-colors"
+             <div className="flex items-center gap-3">
+                {activeTab === 'saved' && (
+                  <button 
+                    onClick={handleExportCSV}
+                    disabled={savedJobsList.length === 0}
+                    className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all disabled:opacity-50"
                   >
-                    <span className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
-                    {isStreaming ? 'Live output — running…' : `Activity log (${activityLogs.length} events)`}
-                    {showTerminal ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    Export CSV
                   </button>
-                  {isStreaming && (
-                    <button
-                      onClick={() => abortRef.current?.abort()}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 text-xs font-bold transition-all border border-red-200 dark:border-red-800"
-                    >
-                      <X className="w-3.5 h-3.5" /> Stop Search
-                    </button>
-                  )}
-                </div>
-                {showTerminal && <LiveActivityFeed logs={activityLogs} isActive={isStreaming} />}
-              </div>
-            )}
-
-            {/* Jobs Grid */}
-            <JobsGrid
-              jobs={filteredJobs}
-              savedJobLinks={savedJobLinks}
-              onSave={handleSaveJob}
-              onTailor={setTailorJob}
-              loading={loading}
-              searched={searched}
-              newJobCount={newJobCount}
-            />
+                )}
+                <button 
+                  onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                  className="p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-400 hover:text-indigo-600 transition-colors"
+                >
+                  {viewMode === 'grid' ? <ListIcon className="w-5 h-5" /> : <LayoutGrid className="w-5 h-5" />}
+                </button>
+                <button 
+                  onClick={() => setIsFilterOpen(!isFilterOpen)}
+                  className="px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-slate-900/10"
+                >
+                  <Filter className="w-4 h-4" /> Filters
+                </button>
+             </div>
           </div>
-        )}
-      </div>
-
-      {/* Tailor Resume Modal */}
-      {tailorJob && resumeText && (
-        <TailorResumeModal
-          job={tailorJob}
-          resumeText={resumeText}
-          onClose={() => setTailorJob(null)}
-        />
-      )}
-      
-      {tailorJob && !resumeText && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-           <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 max-w-sm text-center space-y-4 shadow-2xl border border-slate-200 dark:border-slate-800">
-              <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mx-auto">
-                <Search className="w-8 h-8 text-amber-600 dark:text-amber-400" />
-              </div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Resume Required</h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Please upload your resume in the Setup section first to enable AI tailoring.</p>
-              <button 
-                onClick={() => { setTailorJob(null); setSetupOpen(true); }}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-all"
-              >
-                Go to Setup
-              </button>
-              <button 
-                onClick={() => setTailorJob(null)}
-                className="w-full py-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm font-medium"
-              >
-                Cancel
-              </button>
-           </div>
         </div>
-      )}
-    </main>
+
+        {/* Discovery Carousels */}
+        {activeTab === 'search' && jobs.length === 0 && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-20">
+             <JobCarousel 
+               title="Trending Evolutions" 
+               subtitle="Global Impact Roles" 
+               icon="trending" 
+               jobs={trendingJobs}
+               onSave={handleSaveJob}
+               onViewDetails={setSelectedJob}
+               savedJobLinks={savedJobs}
+             />
+             
+             <JobCarousel 
+               title="Recommended for You" 
+               subtitle="AI Matched specifically for you" 
+               icon="sparkles" 
+               jobs={trendingJobs.slice().reverse()} 
+               onSave={handleSaveJob}
+               onViewDetails={setSelectedJob}
+               savedJobLinks={savedJobs}
+             />
+          </motion.div>
+        )}
+
+        {/* Search Panel & Options - Only show in Search tab */}
+        <AnimatePresence>
+          {activeTab === 'search' && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="mb-12 relative group">
+                <div className="absolute inset-0 bg-indigo-500/10 blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="relative p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[3rem] shadow-2xl flex flex-col md:flex-row items-stretch md:items-center">
+                  <div className="flex-1 flex items-center px-8 py-5 md:py-0">
+                    <Search className="w-6 h-6 text-slate-400 mr-4" />
+                    <input 
+                      type="text" 
+                      value={role}
+                      onChange={(e) => setRole(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                      placeholder="Search by keywords, role, or company..."
+                      className="w-full bg-transparent border-none outline-none text-slate-900 dark:text-white font-black text-lg placeholder:text-slate-400"
+                    />
+                  </div>
+                  <div className="h-10 w-[1px] bg-slate-100 dark:bg-slate-800 hidden md:block mx-2" />
+                  <div className="flex items-center px-8 py-5 md:py-0">
+                    <MapPin className="w-5 h-5 text-slate-400 mr-3" />
+                    <input 
+                      type="text" 
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                      placeholder="Location (Bangalore, Remote...)"
+                      className="bg-transparent border-none outline-none font-bold text-slate-600 dark:text-slate-300 placeholder:text-slate-400"
+                    />
+                  </div>
+                  <button 
+                    onClick={handleSearch}
+                    disabled={loading || !role.trim()}
+                    className="px-10 py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[2.5rem] font-black uppercase tracking-widest text-sm shadow-xl shadow-indigo-600/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? <RefreshCw className="w-5 h-5 animate-spin mx-auto" /> : 'Deep Scan'}
+                  </button>
+                </div>
+                
+                <AnimatePresence>
+                  {loading && progress.length > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className="absolute -bottom-10 left-12 right-12 flex items-center justify-center gap-2"
+                    >
+                      <Sparkles className="w-3 h-3 text-indigo-500 animate-pulse" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600/60 transition-all duration-500">
+                        {progress[progress.length - 1]}
+                      </span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div className="mb-16">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                  <div className="md:col-span-3 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Target Platforms</h3>
+                      <div className="flex gap-4">
+                        <button onClick={() => setSelectedPlatforms(PLATFORMS.map(p => p.id))} className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 uppercase tracking-widest">Select All</button>
+                        <button onClick={() => setSelectedPlatforms(FREE_PLATFORMS)} className="text-[10px] font-bold text-slate-400 hover:text-slate-500 uppercase tracking-widest">Free Only</button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {PLATFORMS.map((p) => (
+                        <button key={p.id} onClick={() => setSelectedPlatforms(prev => prev.includes(p.id) ? prev.filter(id => id !== p.id) : [...prev, p.id])}
+                          className={`px-4 py-2 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${selectedPlatforms.includes(p.id) ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400 hover:border-indigo-400'}`}>
+                          <span className="mr-2">{p.emoji}</span> {p.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                     <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Search Intelligence</h3>
+                     <div className="space-y-2">
+                        <button onClick={() => setAutonomousMode(!autonomousMode)} className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${autonomousMode ? 'bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-500/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400'}`}>
+                          <div className="flex items-center gap-3">
+                            <Globe className={`w-4 h-4 ${autonomousMode ? 'text-white' : 'text-slate-400'}`} />
+                            <div className="text-left">
+                              <div className="text-[10px] font-black uppercase tracking-wider">Autonomous</div>
+                              <div className={`text-[8px] font-bold uppercase ${autonomousMode ? 'text-white/70' : 'text-slate-400'}`}>ECC Wave Search</div>
+                            </div>
+                          </div>
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${autonomousMode ? 'border-white' : 'border-slate-200'}`}>{autonomousMode && <div className="w-2 h-2 rounded-full bg-white" />}</div>
+                        </button>
+                        <button onClick={() => setVibeCoderMode(!vibeCoderMode)} className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all ${vibeCoderMode ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-400'}`}>
+                          <div className="flex items-center gap-3">
+                            <Zap className={`w-4 h-4 ${vibeCoderMode ? 'text-white' : 'text-slate-400'}`} />
+                            <div className="text-left">
+                              <div className="text-[10px] font-black uppercase tracking-wider">Vibe Coder</div>
+                              <div className={`text-[8px] font-bold uppercase ${vibeCoderMode ? 'text-white/70' : 'text-slate-400'}`}>AI & LLM Jobs Only</div>
+                            </div>
+                          </div>
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${vibeCoderMode ? 'border-white' : 'border-slate-200'}`}>{vibeCoderMode && <div className="w-2 h-2 rounded-full bg-white" />}</div>
+                        </button>
+                     </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-10 sticky top-32">
+          {/* Active Filters Sidebar */}
+          <AnimatePresence>
+            {isFilterOpen && (
+              <motion.div initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }} className="lg:col-span-1">
+                <FilterSidebar 
+                  filters={filters} 
+                  onChange={setFilters} 
+                  autoRefresh={false} 
+                  onAutoRefreshToggle={() => {}} 
+                  jobCount={displayedJobs.length} 
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Job Results */}
+          <div className={isFilterOpen ? 'lg:col-span-3' : 'lg:col-span-4'}>
+             <div className="flex items-center gap-4 mb-8">
+                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                  {activeTab === 'search' 
+                    ? (loading ? 'Scanning Global Sources...' : `Showing ${displayedJobs.length.toLocaleString()} Matches Found Globally`)
+                    : `Your Library: ${displayedJobs.length.toLocaleString()} saved opportunities`}
+                </span>
+                <div className="h-[1px] flex-1 bg-slate-100 dark:bg-slate-800" />
+             </div>
+
+             <JobsGrid 
+               jobs={displayedJobs} 
+               savedJobLinks={savedJobs} 
+               onSave={handleSaveJob} 
+               onTailor={() => toast.info('Resume tailoring coming soon!')} 
+               loading={loading}
+               searched={activeTab === 'search' ? jobs.length > 0 : true}
+               newJobCount={0}
+             />
+          </div>
+        </div>
+      </div>
+      <AICoachChat />
+    </div>
+  );
+}
+
+function Badge({ label, active }: { label: string; active?: boolean }) {
+  return (
+    <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer ${
+      active 
+        ? 'bg-indigo-600 text-white' 
+        : 'bg-slate-100 dark:bg-slate-900 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800'
+    }`}>
+      {label}
+    </div>
   );
 }

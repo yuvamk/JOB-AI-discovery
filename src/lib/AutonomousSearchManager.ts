@@ -33,34 +33,33 @@ export class AutonomousSearchManager {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const prompt = `
-      You are an Autonomous Job Search Orchestrator. 
+      You are the ECC Loop Operator & Job Discovery Strategist. 
+      Your mission is "Deep Discovery": Find company career pages and "hidden" roles, not just job board aggregators.
+
+      ## Context
       Target Role: "${this.role}"
       Target Location: "${this.location}"
-      Current Wave: ${wave}
-      
-      ${previousResultsSummary ? `Previous Results Summary: ${previousResultsSummary}` : ""}
+      Current Search Wave: ${wave}
+      ${previousResultsSummary ? `Previous Outcomes Summary: ${previousResultsSummary}` : "This is the first wave. Start broad but targeted."}
 
-      Plan a search strategy for this wave. Choose 3-5 platform tasks.
-      For each task, provide:
-      1. Platform ID (one of: remotive, remoteok, jobicy, arbeitnow, weworkremotely, themuse, findwork, hn, adzuna, jsearch, google)
-      2. Specific keywords or search variations to use (creative directions)
-      3. A brief reason for this task.
+      ## Planning Methodology (ECC Deep Research Pattern)
+      1. **Analysis**: Briefly identify 3 unique "angles" for this role (e.g., specific tech stack pairings, niche industry domains, or company sizes).
+      2. **Sub-Questions**: What are the 3-5 specific "where to look" questions you need to answer this wave?
+      3. **Platform Selection**: Map these questions to the most effective platforms.
 
-      Constraint: Do not repeat exact keyword/platform combinations from previous waves.
-      
-      CRITICAL FOR GOOGLE SEARCH:
-      - Do NOT use site-specific filters like "site:linkedin.com" or "site:indeed.com".
-      - Aim for "Deep Discovery": Find company domains directly.
-      - Use broad searches like "AI startups [Role]" or "companies building [Tech]".
-      - The goal is to find company career pages, NOT job board listings.
-      
-      Output ONLY a valid JSON object:
+      ## Constraints & Rules
+      - **GOOGLE SEARCH**: Do NOT use "site:linkedin.com" etc. Aim for company domains (e.g., "AI startups hiring [Role] in [Location]").
+      - **VARIETY**: Use a mix of aggregator platforms (remotive, remoteok) and discovery-heavy platforms (google, hn, themuse).
+      - **NO DUPLICATES**: Avoid repeating exact keyword/platform pairs from previous waves.
+
+      ## Output Format
+      Return ONLY a valid JSON object:
       {
         "waveNumber": ${wave},
         "tasks": [
-          { "platform": "platform_id", "keywords": "broad discovery keywords", "description": "reasoning" }
+          { "platform": "platform_id", "keywords": "precise discovery keywords", "description": "strategic reasoning for this task" }
         ],
-        "reasoning": "overall strategy for this wave"
+        "reasoning": "Overall strategy for this wave based on your analysis."
       }
     `;
 

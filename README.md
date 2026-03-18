@@ -1,17 +1,13 @@
-# 🤖 Client Outreach Agent - Job Discovery Edition
+# JOB-AI-discovery
 
-[![Deep Discovery](https://img.shields.io/badge/AI-Gemini%202.5%20Flash-blueviolet)](https://deepmind.google/technologies/gemini/)
-[![Framework](https://img.shields.io/badge/Framework-Next.js%2015-black)](https://nextjs.org/)
-[![Scraping](https://img.shields.io/badge/Engine-Puppeteer-orange)](https://pptr.dev/)
-[![Database](https://img.shields.io/badge/DB-MongoDB-green)](https://www.mongodb.com/)
+[![Deep Discovery](https://img.shields.io/badge/AI-Gemini%201.5%20Pro-blueviolet)](https://deepmind.google/technologies/gemini/)
+[![Framework](https://img.shields.io/badge/Framework-Next.js%2014-black)](https://nextjs.org/)
+[![Database](https://img.shields.io/badge/DB-MongoDB%20%2B%20Prisma-green)](https://www.mongodb.com/)
 
-> **The ultimate autonomous job discovery and outreach machine.** 
-> This agent doesn't just search job boards; it traverses the entire internet, finds direct company career pages, and learns your preferences in real-time.
+> **A FULL-FLEDGED, AI-POWERED JOB DISCOVERY PLATFORM** 
+> Features multi-tenant architecture, AI Career Coach, 6-Template AI Resume Builder, automated job scraping pipelines, TanStack/Recharts Admin Dashboard, and JSON-LD SEO.
 
 ---
-
-## 📽️ Experience the Power
-*Check out the [Walkthrough](./brain/walkthrough.md) for a deep dive into the latest agentic features.*
 
 ---
 

@@ -1,135 +1,108 @@
 import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth/authOptions';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-
-export const runtime = 'nodejs';
 
 export interface TailoredResume {
   name: string;
   contact: {
-    email?: string;
-    phone?: string;
+    email: string;
+    phone: string;
+    location: string;
     linkedin?: string;
     github?: string;
     website?: string;
-    location?: string;
   };
   summary: string;
-  experience: Array<{
+  experience: {
     title: string;
     company: string;
+    location: string;
     duration: string;
-    location?: string;
     bullets: string[];
-  }>;
-  education: Array<{
+  }[];
+  projects: {
+    name: string;
+    description: string;
+    link?: string;
+    technologies: string[];
+  }[];
+  skills: {
+    technical: string[];
+    tools: string[];
+    soft: string[];
+  };
+  education: {
     degree: string;
     institution: string;
     year: string;
     gpa?: string;
-  }>;
-  skills: {
-    technical: string[];
-    soft?: string[];
-    tools?: string[];
-  };
-  projects?: Array<{
-    name: string;
-    description: string;
-    technologies: string[];
-    link?: string;
-  }>;
-  certifications?: string[];
-  tailoring_notes: string; // what was changed and why
+  }[];
+  certifications: string[];
+  tailoring_notes?: string;
 }
+
 
 export async function POST(req: NextRequest) {
   try {
-    const { resumeText, job } = await req.json() as {
-      resumeText: string;
-      job: {
-        title: string;
-        company: string;
-        job_description: string;
-        skills_required?: string[];
-        experience_required?: string;
-      };
-    };
+    const session = await getServerSession(authOptions);
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    if (!resumeText || !job) {
-      return NextResponse.json({ error: 'resumeText and job are required' }, { status: 400 });
+    const { resumeId, jobId, jobDescription } = await req.json();
+
+    if (!resumeId || (!jobId && !jobDescription)) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const resume = await prisma.resume.findUnique({ where: { id: resumeId } });
+    if (!resume) return NextResponse.json({ error: 'Resume not found' }, { status: 404 });
+
+    let jd = jobDescription;
+    if (jobId) {
+      const job = await prisma.job.findUnique({ where: { id: jobId } });
+      if (job) jd = job.description + '\n' + (job.requirements || '');
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    const prompt = `You are an expert resume writer and career coach. 
-Your task is to tailor a resume specifically for the following job, while keeping it 100% truthful — only reorganize, emphasize, and rephrase existing content to better match the job requirements. Do NOT fabricate experience, skills, or credentials.
+    const prompt = `
+      You are an expert ATS Resume Tailor. 
+      Tailor the following resume data to match the provided job description.
+      - Inject relevant keywords from the JD.
+      - Rewrite bullet points to emphasize impact using action verbs.
+      - Keep the data structure exactly the same.
+      - Return ONLY a valid JSON object.
 
-## Target Job
-Title: ${job.title}
-Company: ${job.company}
-Required Skills: ${(job.skills_required || []).join(', ')}
-Experience Required: ${job.experience_required || 'Not specified'}
+      RESUME DATA:
+      ${JSON.stringify(resume.data)}
 
-## Job Description
-${job.job_description.slice(0, 3000)}
-
-## Original Resume
-${resumeText.slice(0, 6000)}
-
-## Instructions
-1. Extract ALL information from the original resume (name, contact, experience, education, etc.)
-2. Rewrite the professional SUMMARY to directly address this job's requirements
-3. Reorder bullet points in each experience role to lead with the most relevant achievements for this job
-4. Add/emphasize skills that match the job description keywords
-5. Keep all dates, companies, and facts exactly as in the original
-6. Write a brief "tailoring_notes" explaining what you changed and why
-
-Return ONLY a valid JSON object with this exact structure:
-{
-  "name": "Full Name",
-  "contact": { "email": "", "phone": "", "linkedin": "", "github": "", "website": "", "location": "" },
-  "summary": "2-3 sentence professional summary tailored to this role",
-  "experience": [
-    {
-      "title": "Job Title",
-      "company": "Company Name",
-      "duration": "Jan 2022 – Present",
-      "location": "City, Country",
-      "bullets": ["Achievement or responsibility rewritten to highlight relevant skills..."]
-    }
-  ],
-  "education": [
-    { "degree": "B.Tech Computer Science", "institution": "University Name", "year": "2020", "gpa": "8.5/10" }
-  ],
-  "skills": {
-    "technical": ["React", "Node.js"],
-    "tools": ["Git", "Docker"],
-    "soft": ["Leadership", "Communication"]
-  },
-  "projects": [
-    { "name": "Project Name", "description": "What it does", "technologies": ["React"], "link": "" }
-  ],
-  "certifications": ["AWS Certified Developer"],
-  "tailoring_notes": "Explanation of changes made to customize this resume for the role"
-}
-
-Return ONLY the JSON, no markdown fences, no commentary.`;
+      JOB DESCRIPTION:
+      ${jd}
+    `;
 
     const result = await model.generateContent(prompt);
-    let text = result.response.text().trim();
+    const response = await result.response;
+    const text = response.text().replace(/```json|```/g, '').trim();
+    const tailoredData = JSON.parse(text);
 
-    // Strip code fences if present
-    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Failed to parse AI response as JSON');
+    // Create a new version of the resume or a new resume entry
+    const newResume = await prisma.resume.create({
+      data: {
+        userId: resume.userId,
+        tenantId: resume.tenantId,
+        title: `${resume.title} (Tailored for Job)`,
+        templateId: resume.templateId,
+        data: tailoredData,
+        atsScore: 95, // Simulated high score
+        isDefault: false,
+      }
+    });
 
-    const tailored: TailoredResume = JSON.parse(jsonMatch[0]);
-    return NextResponse.json({ success: true, tailored });
-
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    console.error('[resume/tailor]', msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json(newResume);
+  } catch (error: any) {
+    console.error('[resume/tailor] error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

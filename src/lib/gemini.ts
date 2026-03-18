@@ -11,24 +11,23 @@ export async function generatePersonalizedEmail(businessName: string, category: 
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const prompt = `
-            You are Yuvam Kumar, the lead at Kinetic, a boutique digital agency specializing in premium web presence for local businesses.
+            You are the ECC Outreach Agent.
+            Mission: High-Impact, Low-Friction communication for Yuvam Kumar (Lead at Kinetic).
+
+            ## Context
+            - Business: "${businessName}" (${category}) in ${city}
+            - Problem: No professional web presence.
+
+            ## Instructions (ECC "Brevity & IMPACT" Pattern)
+            1. **Extreme Brevity**: Keep it under 100 words.
+            2. **Direct Value**: Lead with the fact that they are losing local ${category} customers in ${city} to online competitors.
+            3. **The Ask**: Propose a quick "no-pressure" intro chat.
+            4. **No Fluff**: No "I hope you are well". Start with the point.
             
-            Write a short, high-impact, and non-spammy outreach email to the owner of "${businessName}", a ${category} in ${city}.
+            ## Branding
+            - Sign-off: Yuvam Kumar | 8650825573 | yuvamk6@gmail.com
             
-            Context:
-            - Business Name: ${businessName}
-            - Category: ${category}
-            - Location: ${city}
-            - Problem: They currently have NO professional website found on Google, which is costing them customers to competitors who are online.
-            
-            Guidelines:
-            1. Organization Name: Kinetic
-            2. Personal Sign-off: Yuvam Kumar
-            3. Contact Details: 8650825573 | yuvamk6@gmail.com
-            4. Goal: Grab their attention by showing you understand their business niche (${category}) and offer to help them dominate the ${city} market with a modern web presence.
-            5. Tone: Professional, exclusive (not desperate), and helpful.
-            6. Constraints: Maximum 120 words.
-            7. Output: ONLY the body text of the email. Do NOT include a subject line or any markdown bolding like **. Just clean, professional text that can be inserted into an HTML template.
+            Return ONLY the body text. No subject, no markdown formatting.
         `;
 
         const result = await model.generateContent(prompt);
