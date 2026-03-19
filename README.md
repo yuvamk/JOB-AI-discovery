@@ -58,27 +58,74 @@ Never see a "junk" job again.
 ## 🚦 Getting Started
 
 ### Prerequisites
-- Node.js 18+
-- MongoDB instance (Atlas or local)
-- Google AI Studio API Key (Gemini)
+- **Node.js**: 18.0.0 or higher
+- **MongoDB**: A running MongoDB instance (Atlas recommended)
+- **Google AI Studio**: API Key for Gemini 1.5/2.0
+- **Gmail Account**: For sending OTPs (requires App Password)
+- **Google Cloud Console**: For Google Login (OAuth 2.0)
 
-### Installation
-1. **Clone the repo**:
-   ```bash
-   git clone https://github.com/yuvamk/Client-Outreach-Agent-Job-Discovery.git
-   cd client-outreach-agent
-   ```
-2. **Setup Environment**:
-   Create a `.env.local` file:
-   ```env
-   MONGODB_URI=your_mongodb_uri
-   GEMINI_API_KEY=your_gemini_key
-   ```
-3. **Install & Run**:
-   ```bash
-   npm install
-   npm run dev
-   ```
+### 1. Environment Configuration
+Create a `.env` file in the root directory and add the following variables:
+
+```env
+# MongoDB Connection
+MONGODB_URI="mongodb+srv://..."
+DATABASE_URL="mongodb+srv://..."
+
+# AI Engine (Google Gemini)
+GEMINI_API_KEY="your-gemini-api-key"
+
+# Authentication (NextAuth)
+NEXTAUTH_URL="http://localhost:3001"
+NEXTAUTH_SECRET="your-32-character-secret"
+
+# OTP Email (Gmail)
+GMAIL_USER="your-email@gmail.com"
+GMAIL_APP_PASSWORD="your-app-password"
+
+# Google OAuth
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+```
+
+#### 🛡️ How to get Gmail App Password:
+1. Go to your Google Account settings.
+2. Enable **2-Step Verification**.
+3. Search for **App Passwords**.
+4. Create a new app password (select 'Other' and name it 'Kinetic').
+5. Copy the 16-character code into `GMAIL_APP_PASSWORD`.
+
+#### 🔑 How to get Google OAuth Credentials:
+1. Go to [Google Cloud Console](https://console.cloud.google.com/).
+2. Create a project and set up the **OAuth Consent Screen**.
+3. Create **Credentials** -> **OAuth Client ID** (Web Application).
+4. Add `http://localhost:3001` to **Authorized JavaScript origins**.
+5. Add `http://localhost:3001/api/auth/callback/google` to **Authorized redirect URIs**.
+
+### 2. Installation & Database Sync
+```bash
+# Install dependencies
+npm install --legacy-peer-deps
+
+# Push schema to MongoDB and Generate Prisma Client
+npx prisma db push
+npx prisma generate
+```
+
+### 3. Run Development Server
+```bash
+npm run dev -p 3001
+```
+
+---
+
+## 🏗️ Project Architecture
+- **Next.js (App Router)**: Framework for both frontend and backend.
+- **Prisma**: ORM for MongoDB interaction.
+- **Next-Auth**: Complete authentication solution (Google, Email OTP).
+- **Framer Motion**: For fluid, premium animations and glassmorphic UI.
+- **Nodemailer**: Secure transactional email delivery for OTPs.
+- **Google Gemini**: Strategic reasoning and job-matching engine.
 
 ---
 
