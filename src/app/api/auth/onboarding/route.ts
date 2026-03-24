@@ -13,16 +13,29 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { headline, bio, location, experienceLevel, skills } = body;
 
-    const updatedUser = await prisma.user.update({
-      where: { email: session.user.email },
-      data: {
-        headline,
-        bio,
-        location,
-        experienceLevel,
-        skills,
-        profileComplete: true,
+    // Use $runCommandRaw to bypass Prisma's transaction wrapper.
+    // MongoDB Atlas M0 (free tier) does not support transactions, and Prisma
+    // wraps all update() / updateMany() calls in transactions for MongoDB.
+    // Using the native findAndModify command avoids this entirely.
+    await prisma.$runCommandRaw({
+      findAndModify: 'users',
+      query: { email: session.user.email },
+      update: {
+        $set: {
+          headline: headline ?? null,
+          bio: bio ?? null,
+          location: location ?? null,
+          experienceLevel: experienceLevel ?? null,
+          skills: skills ?? [],
+          profileComplete: true,
+        },
       },
+      new: true,
+    });
+
+    // Fetch the updated document via a read (reads don't need transactions)
+    const updatedUser = await prisma.user.findFirst({
+      where: { email: session.user.email },
     });
 
     return NextResponse.json(updatedUser);
